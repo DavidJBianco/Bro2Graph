@@ -1,0 +1,6 @@
+// Shortest path between two vertices
+def shortest_path(v1, v2, hops) {
+  p = v1.as("x").out.loop("x"){it.loops < hops}{it.object == v2}.path
+
+  p
+}

@@ -8,7 +8,13 @@ import re
 import StringIO
 import pandas
 
-from bulbs.rexster import Graph, Config
+# Our interface to the GraphDB
+from bulbs.rexster import Graph, Config, DEBUG
+
+# Our own modules
+from gh.connect import Connect
+#from gh.flow import Flow, Source, Dest
+#from gh.host import Host
 
 # Bro log files we support
 SUPPORTED_BRO_LOGS = ["conn.log", "dns.log", "dpd.log","files.log","ftp.log","http.log","irc.log","notice.log","smtp.log","snmp.log","ssh.log"]
@@ -67,7 +73,7 @@ def readlog(file):
 
     # Now we're going to use the "pandas" package to create a dataframe
     # out of the log data.  Dataframes greatly simplify the tasks of cleaning
-    # the data and writing it to disk again.
+    # the data.
     #
     # StringIO treats the string as a fake file, so we can use pandas to
     # create a dataframe out of the string directly, without having to write
@@ -77,31 +83,13 @@ def readlog(file):
     df = pandas.DataFrame.from_csv(brodata, sep="\t", parse_dates=False, header=None, index_col=None)
 
     df.columns = SUPPORTED_BRO_FIELDS[logtype]
-#    cols.append("test")
-#    print cols
-#    df.columns = cols
 
     df.replace(to_replace=["(empty)","-"], value=["",""], inplace=True)
 
     
     return df
-    
 
-def node_exists(g, address, label):
-    nodes = g.vertices.index.lookup(name=address)
-    return not nodes == None
 
-def add_node(g, address, label):
-    node = g.vertices.create(name=address, label=label)
-    return node
-
-def node_lookup_by_name(g, name, label):
-    node = g.vertices.index.lookup(name=name)
-    if node == None:
-        return None
-    else:
-        return node.next()
-    
 ##### Main #####
 
 (options, args) = parse_options()
@@ -122,12 +110,7 @@ if not options.quiet:
 
 # Now we can start to read data and populate the graph.
 
-# First, connect to our graph
-config = Config("http://localhost:8182/graphs/hunting")
-g = Graph(config)
-
-# Make sure this graph is empty.  THIS WILL NUKE ALL CONTENTS!
-#g.clear()
+g = Connect()
 
 # Now read the types of logs we know how to process, extract the relevant
 # data and add it to the graph
@@ -141,39 +124,33 @@ for con in df_conn.index:
 
     # For each flow, create new Host objects if necessary.  Then create a new
     # Flow, and add the relationships between the Hosts and the Flow
-    if not node_exists(g, df_conn.loc[con]["id.orig_h"],"Host"):
-        src_host = add_node(g,df_conn.loc[con]["id.orig_h"],"Host")
-    else:
-        src_host = node_lookup_by_name(g, df_conn.loc[con]["id.orig_h"], "Host")
-    if not node_exists(g,df_conn.loc[con]["id.resp_h"],"Host"):
-        dst_host = add_node(g,df_conn.loc[con]["id.resp_h"],"Host")
-    else:
-        dst_host = node_lookup_by_name(g, df_conn.loc[con]["id.resp_h"], "Host")
+
+    # Create the source & dest nodes
+    src_host = g.host.get_or_create("name", df_conn.loc[con]["id.orig_h"],{"name": df_conn.loc[con]["id.orig_h"]})
+    dst_host = g.host.get_or_create("name", df_conn.loc[con]["id.resp_h"],{"name": df_conn.loc[con]["id.resp_h"]})
 
     # Create the Flow object.  Since we can run the same log file through
     # multiple times, or observe the same flow from different log files,
     # assume flows with the same name are actually the same flow.
-    flowname = "%s:%d -> %s:%d %s" % (df_conn.loc[con]["id.orig_h"],
-                                      df_conn.loc[con]["id.orig_p"],
-                                      df_conn.loc[con]["id.resp_h"],
-                                      df_conn.loc[con]["id.resp_p"],
-                                      df_conn.loc[con]["proto"])
-    if not node_exists(g, flowname, "Flow"):
-        flow = add_node(g, flowname, "Flow")
-    else:
-        flow = node_lookup_by_name(g, flowname, "Flow")
+
+    flowname = df_conn.loc[con]["uid"]
+    # Create the flow node, with all the rich data
+    properties = dict(df_conn.loc[con])
+    # Manually assign the "name" property
+    properties["name"] = flowname
+
+    flow = g.flow.get_or_create("name", flowname, properties)
 
     # Create the edges for this flow, if they don't already exist
     nodes = flow.inV("source")
     if nodes == None or not (src_host in nodes):
-        g.edges.create(src_host, "source", flow)
+        g.source.create(src_host, flow)
     nodes = flow.outV("dest")
     if nodes == None or not (dst_host in nodes):
-        g.edges.create(flow, "dest", dst_host)
-    
-    
-                                    
+        g.dest.create(flow, dst_host)
 
+        
+    
 
 
 
