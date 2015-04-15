@@ -1,6 +1,7 @@
 from bulbs.rexster import Graph, Config
 from host import Host
 from flow import Flow, Source, Dest
+from dns import DNS, Resolved
 
 URI = "http://localhost:8182/graphs/hunting"
 
@@ -26,7 +27,9 @@ def Connect(uri=URI):
     g.add_proxy("flow", Flow)
     g.add_proxy("source", Source)
     g.add_proxy("dest", Dest)
-
+    g.add_proxy("dns", DNS)
+    g.add_proxy("resolved", Resolved)
+    
     # Load in our groovy scripts
     g.scripts.update("groovy/shortest_path.groovy")
 

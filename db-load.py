@@ -13,8 +13,6 @@ from bulbs.rexster import Graph, Config, DEBUG
 
 # Our own modules
 from gh.connect import Connect
-#from gh.flow import Flow, Source, Dest
-#from gh.host import Host
 
 # Bro log files we support
 SUPPORTED_BRO_LOGS = ["conn.log", "dns.log", "dpd.log","files.log","ftp.log","http.log","irc.log","notice.log","smtp.log","snmp.log","ssh.log"]
@@ -89,7 +87,75 @@ def readlog(file):
     
     return df
 
+def graph_flows(g, df_conn):
+    # Iterate through all the flows
+    for con in df_conn.index:
+        # For each flow, create new Host objects if necessary.  Then create a
+        # new Flow, and add the relationships between the Hosts and the Flow
+  
+        # Create the source & dest nodes
+        src_host = g.host.get_or_create("name", df_conn.loc[con]["id.orig_h"],{"name": df_conn.loc[con]["id.orig_h"]})
+        dst_host = g.host.get_or_create("name", df_conn.loc[con]["id.resp_h"],{"name": df_conn.loc[con]["id.resp_h"]})
 
+        # Create the Flow object.  Since we can run the same log file through
+        # multiple times, or observe the same flow from different log files,
+        # assume flows with the same name are actually the same flow.
+
+        flowname = df_conn.loc[con]["uid"]
+        # Create the flow node, with all the rich data
+        properties = dict(df_conn.loc[con])
+        # Manually assign the "name" property
+        properties["name"] = flowname
+        # Take out the info about the source & dest IPs, since we should be
+        # getting them from the connected host nodes
+        del properties["id.orig_h"]
+        del properties["id.resp_h"]
+        
+        flow = g.flow.get_or_create("name", flowname, properties)
+
+        # Create the edges for this flow, if they don't already exist
+        nodes = flow.inV("source")
+        if nodes == None or not (src_host in nodes):
+            g.source.create(src_host, flow)
+        
+        nodes = flow.outV("dest")
+        if nodes == None or not (dst_host in nodes):
+            g.dest.create(flow, dst_host)
+
+def graph_dns(g, df_dns):
+    # Iterate through all the flows
+    for i in df_dns.index:
+        # Create the DNS transaction node
+        name = df_dns.loc[i]["query"]
+        qtype = df_dns.loc[i]["qtype"]
+        qtype_name = df_dns.loc[i]["qtype_name"]
+        flowname = df_dns.loc[i]["uid"]
+        
+        properties = dict(df_dns.loc[i])
+        properties["name"] = name
+
+        # These are encoded in the edges, or in the vertices the edges
+        # connect with.  Therefore, they should not be in the node.
+        del properties["uid"]
+        del properties["qtype"]
+        del properties["qtype_name"]
+
+        dns = g.dns.get_or_create("name", df_dns.loc[i]["query"],
+                                  properties)
+        
+        # Now connect this to the correct flow
+        flows = g.flow.index.lookup(name=flowname)
+        if flows == None:
+            print "ERROR: Flow '%s' does not exist" % flowname
+        else:
+            flow = flows.next()
+            nodes = flow.inV("resolved")
+            if nodes == None or not (dns in nodes):
+                edge = g.resolved.create(flow, dns,
+                                         {"qtype": qtype,
+                                          "qtype_name": qtype_name})
+
+            
 ##### Main #####
 
 (options, args) = parse_options()
@@ -119,37 +185,25 @@ df_conn = readlog("conn.log")
 
 print "Graphing Flows..."
 
-# Iterate through all the flows
-for con in df_conn.index:
+#graph_flows(g, df_conn)
 
-    # For each flow, create new Host objects if necessary.  Then create a new
-    # Flow, and add the relationships between the Hosts and the Flow
+df_dns = readlog("dns.log")
 
-    # Create the source & dest nodes
-    src_host = g.host.get_or_create("name", df_conn.loc[con]["id.orig_h"],{"name": df_conn.loc[con]["id.orig_h"]})
-    dst_host = g.host.get_or_create("name", df_conn.loc[con]["id.resp_h"],{"name": df_conn.loc[con]["id.resp_h"]})
+print "Graphing DNS Transactions..."
 
-    # Create the Flow object.  Since we can run the same log file through
-    # multiple times, or observe the same flow from different log files,
-    # assume flows with the same name are actually the same flow.
+graph_dns(g, df_dns)
 
-    flowname = df_conn.loc[con]["uid"]
-    # Create the flow node, with all the rich data
-    properties = dict(df_conn.loc[con])
-    # Manually assign the "name" property
-    properties["name"] = flowname
+# Print some basic info about the graph so we know we did some real work
+print "Vertices: %d Edges: %d" % ( len(list(g.V)), len(list(g.E)) )
+print "\tHosts: %d" % len(list(g.host.get_all()))
+print "\tFlows: %d" % len(list(g.flow.get_all()))
+print "\tDNS:   %d" % len(list(g.dns.get_all()))
+print
 
-    flow = g.flow.get_or_create("name", flowname, properties)
+print "\tSource: %d" % len(list(g.source.get_all()))
+print "\tDest:   %d" % len(list(g.dest.get_all()))
+print "\tResolved: %d" % len(list(g.resolved.get_all()))
 
-    # Create the edges for this flow, if they don't already exist
-    nodes = flow.inV("source")
-    if nodes == None or not (src_host in nodes):
-        g.source.create(src_host, flow)
-    nodes = flow.outV("dest")
-    if nodes == None or not (dst_host in nodes):
-        g.dest.create(flow, dst_host)
-
-        
     
 
 
