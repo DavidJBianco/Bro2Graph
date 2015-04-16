@@ -229,9 +229,9 @@ def graph_dns(g, df_dns):
             # lookup returns a generator, but since there should only be one
             # flow with this name, just take the first one
             flow = flows.next()
-            nodes = flow.outV("resolved")
+            nodes = flow.outV("contains")
             if nodes == None or not (transaction in nodes):
-                edge = g.resolved.create(flow, transaction)
+                edge = g.contains.create(flow, transaction)
 
             
 ##### Main #####
@@ -282,7 +282,7 @@ print
 
 print "\tSource: %d" % len(list(g.source.get_all()))
 print "\tDest:   %d" % len(list(g.dest.get_all()))
-print "\tResolved: %d" % len(list(g.resolved.get_all()))
+print "\tConatins: %d" % len(list(g.contains.get_all()))
 print "\tResolvedTo: %d" % len(list(g.resolvedTo.get_all()))
 print "\tLookedUp: %d" % len(list(g.lookedUp.get_all()))
 print "\tqueriedServer: %d" % len(list(g.queriedServer.get_all()))

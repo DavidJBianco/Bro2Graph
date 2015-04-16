@@ -15,4 +15,9 @@ class Source(Relationship):
 class Dest(Relationship):
     label = "dest"
     element_type = "dest"
-    
+
+class Contains(Relationship):
+    label = "contains"
+    element_type = "contains"
+
+
