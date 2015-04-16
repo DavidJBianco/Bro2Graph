@@ -2,15 +2,38 @@ from bulbs.model import Node, Relationship
 from bulbs.property import String, Integer, DateTime
 from bulbs.utils import current_datetime
 
-class DNS(Node):
+class FQDN(Node):
 
-    element_type = "dns"
+    element_type = "fqdn"
 
     name = String(nullable=False)
 
+class DNSTransaction(Node):
+    element_type = "dnsTransaction"
+
+    name = String(nullable=False)
+    
 class Resolved(Relationship):
     label = "resolved"
-    element_type = "resolved"
+    element_type = label
 
+class Answer(Relationship):
+    label = "answer"
+    element_type = label
     
+class Queried(Relationship):
+    label = "queried"
+    element_type = label
+
+class QueriedServer(Relationship):
+    label = "queriedServer"
+    element_type = label
+
+class LookedUp(Relationship):
+    label = "lookedUp"
+    element_type = label
+
+class ResolvedTo(Relationship):
+    label = "resolvedTo"
+    element_type = label
     

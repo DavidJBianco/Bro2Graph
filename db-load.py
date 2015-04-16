@@ -37,6 +37,9 @@ DATE_FMT="%FT%H:%M:%SZ"
 
 BRO_CUT_CMD=["bro-cut","-U",DATE_FMT]
 
+def is_IP(s):
+    return not (re.match("\d+.\d+.\d+.\d+$", s) == None)
+
 def parse_options() :
     parser = OptionParser()
     parser.add_option("-l", "--log-dir", dest="logdir",
@@ -94,9 +97,25 @@ def graph_flows(g, df_conn):
         # new Flow, and add the relationships between the Hosts and the Flow
   
         # Create the source & dest nodes
-        src_host = g.host.get_or_create("name", df_conn.loc[con]["id.orig_h"],{"name": df_conn.loc[con]["id.orig_h"]})
-        dst_host = g.host.get_or_create("name", df_conn.loc[con]["id.resp_h"],{"name": df_conn.loc[con]["id.resp_h"]})
+        src_host = g.host.get_or_create("name",
+                                        df_conn.loc[con]["id.orig_h"],
+                                        {"name": df_conn.loc[con]["id.orig_h"],
+                                         "address":df_conn.loc[con]["id.orig_h"]
+                                     })
+        dst_host = g.host.get_or_create("name",
+                                        df_conn.loc[con]["id.resp_h"],
+                                        {"name": df_conn.loc[con]["id.resp_h"],
+                                         "address":df_conn.loc[con]["id.resp_h"]
+                                     })
 
+        # If the flow is marked "local_orig", we need to update this feature
+        # on the source host.  We can't do this at creation time because we
+        # might have seen this host before in another context, and created a
+        # node for it without knowing it was a local host.
+        if df_conn.loc[con]["local_orig"] == "T":
+            src_host.local = "T"
+            src_host.save()
+        
         # Create the Flow object.  Since we can run the same log file through
         # multiple times, or observe the same flow from different log files,
         # assume flows with the same name are actually the same flow.
@@ -125,35 +144,94 @@ def graph_flows(g, df_conn):
 def graph_dns(g, df_dns):
     # Iterate through all the flows
     for i in df_dns.index:
-        # Create the DNS transaction node
-        name = df_dns.loc[i]["query"]
-        qtype = df_dns.loc[i]["qtype"]
-        qtype_name = df_dns.loc[i]["qtype_name"]
+        # Create the DNSTransaction node
+        name = str(df_dns.loc[i]["trans_id"])
+        timestamp = df_dns.loc[i]["ts"]
         flowname = df_dns.loc[i]["uid"]
         
-        properties = dict(df_dns.loc[i])
+        properties = dict()
         properties["name"] = name
+        # Pick out the properties that belong on the transaction and add
+        # them
+        transaction = g.dnsTransaction.create(name=name,
+                                              ts=df_dns.loc[i]["ts"],
+                                              proto=df_dns.loc[i]["proto"],
+                                              orig_p=df_dns.loc[i]["id.orig_p"],
+                                              resp_p=df_dns.loc[i]["id.resp_p"],
+                                              qclass=df_dns.loc[i]["qclass"],
+                                              qclass_name=df_dns.loc[i]["qclass_name"],
+                                              qtype=df_dns.loc[i]["qtype"],
+                                              qtype_name=df_dns.loc[i]["qtype_name"],
+                                              rcode=df_dns.loc[i]["rcode"],
+                                              rcode_name=df_dns.loc[i]["rcode_name"],
+                                              AA=df_dns.loc[i]["AA"],
+                                              TC=df_dns.loc[i]["TC"],
+                                              RD=df_dns.loc[i]["RD"],
+                                              RA=df_dns.loc[i]["RA"],
+                                              Z=df_dns.loc[i]["Z"],
+                                              rejected=df_dns.loc[i]["rejected"])
 
-        # These are encoded in the edges, or in the vertices the edges
-        # connect with.  Therefore, they should not be in the node.
-        del properties["uid"]
-        del properties["qtype"]
-        del properties["qtype_name"]
+        # Create a node + edge for the query, if there is one in the log
+        if df_dns.loc[i]["query"]:
+            fqdn = g.fqdn.get_or_create("name", df_dns.loc[i]["query"],
+                                        {"name":df_dns.loc[i]["query"],
+                                         "domain":df_dns.loc[i]["query"]})
+            g.lookedUp.create(transaction,fqdn)
 
-        dns = g.dns.get_or_create("name", df_dns.loc[i]["query"],
-                                  properties)
+            # Now create the nodes and edges for the domains or addresses in
+            # the answer (if there is an answer).  There can be multiple
+            # answers, so split this into a list and create one node + edge
+            # for each.
+            #
+            # There should also be one TTL per answer, so we'll split those and
+            # use array indices to tie them together. The arrays are supposed
+            # to always be the same length
+            if df_dns.loc[i]["answers"]:
+                addrs = df_dns.loc[i]["answers"].split(",")
+                ttls = df_dns.loc[i]["TTLs"].split(",")
+                for i in range(len(addrs)):
+                    ans = addrs[i]
+                    ttl = ttls[i]
+                    # DNS answers can be either IPs or other names. Figure
+                    # out which type of node to create for each answer.
+                    if is_IP(ans):
+                        node = g.host.get_or_create("name",ans,{"name":ans,
+                                                                "address":ans})
+                    else:
+                        node = g.fqdn.get_or_create("name",ans,{"name":ans,
+                                                                "address":ans})
+                                                
+                    g.resolvedTo.create(fqdn, node, {"ts":timestamp})
+                    g.answer.create(transaction, node, {"TTL": ttl})
+
+        # Create a node + edge for the source of the DNS transaction
+        # (the client host)
+        if df_dns.loc[i]["id.orig_h"]:
+            src = g.host.get_or_create("name", df_dns.loc[i]["id.orig_h"],
+                                       {"name": df_dns.loc[i]["id.orig_h"],
+                                        "address":df_dns.loc[i]["id.orig_h"]})
+            g.queried.create(src, transaction)
         
-        # Now connect this to the correct flow
+        # Create a node + edge for the destination of the DNS transaction
+        # (the DNS server)
+        if df_dns.loc[i]["id.resp_h"]:
+            dst = g.host.get_or_create("name", df_dns.loc[i]["id.resp_h"],
+                                       {"name": df_dns.loc[i]["id.resp_h"],
+                                        "address":df_dns.loc[i]["id.resp_h"]})
+            g.queriedServer.create(transaction,dst)
+
+        
+        # Now connect this transaction to the correct flow
         flows = g.flow.index.lookup(name=flowname)
         if flows == None:
             print "ERROR: Flow '%s' does not exist" % flowname
         else:
+            # lookup returns a generator, but since there should only be one
+            # flow with this name, just take the first one
             flow = flows.next()
-            nodes = flow.inV("resolved")
-            if nodes == None or not (dns in nodes):
-                edge = g.resolved.create(flow, dns,
-                                         {"qtype": qtype,
-                                          "qtype_name": qtype_name})
+            nodes = flow.outV("resolved")
+            if nodes == None or not (transaction in nodes):
+                edge = g.resolved.create(flow, transaction)
 
             
 ##### Main #####
@@ -185,7 +263,7 @@ df_conn = readlog("conn.log")
 
 print "Graphing Flows..."
 
-#graph_flows(g, df_conn)
+graph_flows(g, df_conn)
 
 df_dns = readlog("dns.log")
 
@@ -197,12 +275,17 @@ graph_dns(g, df_dns)
 print "Vertices: %d Edges: %d" % ( len(list(g.V)), len(list(g.E)) )
 print "\tHosts: %d" % len(list(g.host.get_all()))
 print "\tFlows: %d" % len(list(g.flow.get_all()))
-print "\tDNS:   %d" % len(list(g.dns.get_all()))
+print "\tDNSTransactions:   %d" % len(list(g.dnsTransaction.get_all()))
+print "\tFQDNs:   %d" % len(list(g.fqdn.get_all()))
+
 print
 
 print "\tSource: %d" % len(list(g.source.get_all()))
 print "\tDest:   %d" % len(list(g.dest.get_all()))
 print "\tResolved: %d" % len(list(g.resolved.get_all()))
+print "\tResolvedTo: %d" % len(list(g.resolvedTo.get_all()))
+print "\tLookedUp: %d" % len(list(g.lookedUp.get_all()))
+print "\tqueriedServer: %d" % len(list(g.queriedServer.get_all()))
 
     
 
