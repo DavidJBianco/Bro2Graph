@@ -149,8 +149,6 @@ def graph_dns(g, df_dns):
         timestamp = df_dns.loc[i]["ts"]
         flowname = df_dns.loc[i]["uid"]
         
-        properties = dict()
-        properties["name"] = name
         # Pick out the properties that belong on the transaction and add
         # them
         transaction = g.dnsTransaction.create(name=name,
@@ -233,7 +231,63 @@ def graph_dns(g, df_dns):
             if nodes == None or not (transaction in nodes):
                 edge = g.contains.create(flow, transaction)
 
+def graph_files(g, df_files):
+    # Iterate through all the flows
+    for i in df_files.index:
+        # Create the DNSTransaction node
+        name = str(df_files.loc[i]["fuid"])
+        timestamp = df_files.loc[i]["ts"]
+        flows = df_files.loc[i]["conn_uids"]
+        
+        # Create the file object. Note that this is more like a file transfer
+        # transaction than a static object just for that file.  There can be
+        # more than one node with the same MD5 hash, for example.  Cleary,
+        # those are the same file in the real world, but not in our graph.
+        file = g.file.create(name=name,
+                             fuid=df_files.loc[i]["fuid"],
+                             source=df_files.loc[i]["source"],
+                             depth=df_files.loc[i]["depth"],
+                             analyzers=df_files.loc[i]["analyzers"],
+                             mime_type=df_files.loc[i]["mime_type"],
+                             filename=df_files.loc[i]["filename"],
+                             duration=df_files.loc[i]["duration"],
+                             seen_bytes=df_files.loc[i]["seen_bytes"],
+                             total_bytes=df_files.loc[i]["total_bytes"],
+                             missing_bytes=df_files.loc[i]["missing_bytes"],
+                             overflow_bytes=df_files.loc[i]["overflow_bytes"],
+                             timedout=df_files.loc[i]["timedout"],
+                             md5=df_files.loc[i]["md5"],
+                             sha1=df_files.loc[i]["sha1"],
+                             sha256=df_files.loc[i]["sha256"],
+                             extracted=df_files.loc[i]["extracted"])
+
+        # Now connect this to the flow(s) it is associated with.
+        for f in flows.split(","):
+            flow = g.flow.get_or_create("name", name, {"name":name})
+            g.contains.create(flow, file)
+
+        # Connect it to the src and dest hosts in the file xfer.  Note that
+        # there can be more than one host listed for each side of the
+        # xfer (don't ask me how).  
+        for h in df_files.loc[i]["tx_hosts"].split(","):
+            src = g.host.get_or_create(name, h,
+                                       {"name":h,
+                                        "address":h})
+            g.requestedBy.create(file,src,{"ts":timestamp,
+                                           "is_orig":df_files.loc[i]["is_orig"]})
+            # Also have this extra bit of info about whether the originating
+            # host is part of a local subnet.  We should make sure that is
+            # recorded on the host object.
+            src.local = df_files.loc[i]["local_orig"]
+            src.save()
             
+        for h in df_files.loc[i]["rx_hosts"].split(","):
+            dst = g.host.get_or_create(name, h,
+                                       {"name":h,
+                                        "address":h})
+            g.requestedOf.create(file,dst,{"ts":timestamp})
+            
+ 
 ##### Main #####
 
 (options, args) = parse_options()
@@ -259,33 +313,43 @@ g = Connect()
 # Now read the types of logs we know how to process, extract the relevant
 # data and add it to the graph
 
-df_conn = readlog("conn.log")
 
 print "Graphing Flows..."
-
+df_conn = readlog("conn.log")
 graph_flows(g, df_conn)
 
-df_dns = readlog("dns.log")
+print "Graphing Files..."
+df_files = readlog("files.log")
+graph_files(g, df_files)
 
 print "Graphing DNS Transactions..."
-
+df_dns = readlog("dns.log")
 graph_dns(g, df_dns)
 
+
 # Print some basic info about the graph so we know we did some real work
-print "Vertices: %d Edges: %d" % ( len(list(g.V)), len(list(g.E)) )
-print "\tHosts: %d" % len(list(g.host.get_all()))
-print "\tFlows: %d" % len(list(g.flow.get_all()))
-print "\tDNSTransactions:   %d" % len(list(g.dnsTransaction.get_all()))
-print "\tFQDNs:   %d" % len(list(g.fqdn.get_all()))
+#print "Vertices: %d Edges: %d" % ( len(list(g.V)), len(list(g.E)) )
+
+script = g.scripts.get("graph_info")
+
+res = g.gremlin.execute(script)
+info = res.results.next().data
 
 print
+print "**** Graph Stats"
+print
+print "  **** Totals"
+print "  %15s\t%d" % ("Vertices", info["numv"])
+print "  %15s\t%d" % ("Edges", info["nume"])
+print
+print "  **** Vertices by type:"
+for v in info["vinfo"]:
+    print "  %15s\t%d" % (v, info["vinfo"][v])
+print
+print "  **** Edges by type:"
+for e in info["einfo"]:
+    print "  %15s\t%d" % (e, info["einfo"][e])
 
-print "\tSource: %d" % len(list(g.source.get_all()))
-print "\tDest:   %d" % len(list(g.dest.get_all()))
-print "\tConatins: %d" % len(list(g.contains.get_all()))
-print "\tResolvedTo: %d" % len(list(g.resolvedTo.get_all()))
-print "\tLookedUp: %d" % len(list(g.lookedUp.get_all()))
-print "\tqueriedServer: %d" % len(list(g.queriedServer.get_all()))
 
     
 
