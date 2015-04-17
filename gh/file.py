@@ -12,12 +12,12 @@ class Transferred(Relationship):
     label = "transferred"
     element_type = label
     
-class ServedTo(Relationship):
-    label = "servedTo"
+class RequestedBy(Relationship):
+    label = "requestedBy"
     element_type = label
     
-class ServedBy(Relationship):
-    label = "servedBy"
+class RequestedOf(Relationship):
+    label = "requestedOf"
     element_type = label
     
 

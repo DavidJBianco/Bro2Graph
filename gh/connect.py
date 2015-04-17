@@ -2,7 +2,7 @@ from bulbs.rexster import Graph, Config
 from host import Host
 from flow import Flow, Source, Dest, Contains
 from dns import FQDN, DNSTransaction, LookedUp, Queried, Answer, QueriedServer, Resolved, ResolvedTo
-from file import File, Transferred, ServedTo, ServedBy
+from file import File, Transferred, RequestedBy, RequestedOf
 from http import HTTPTransaction, URI, UserAgent, Referrer, HostedBy, RequestedBy, RequestedOf, Requested
 from account import Account
 
@@ -41,14 +41,13 @@ def Connect(uri=DEFAULT_URI):
     g.add_proxy("resolvedTo", ResolvedTo)
     g.add_proxy("file", File)
     g.add_proxy("transferred", Transferred)
-    g.add_proxy("servedTo", ServedTo)
-    g.add_proxy("servedBy", ServedBy)
+    g.add_proxy("requestedBy", RequestedBy)
+    g.add_proxy("requestedOf", RequestedOf)
     g.add_proxy("httpTransaction", HTTPTransaction)
     g.add_proxy("uri", URI)
     g.add_proxy("userAgent", UserAgent)
     g.add_proxy("account", Account)
     g.add_proxy("requested", Requested)
     # Load in our groovy scripts
-    g.scripts.update("groovy/shortest_path.groovy")
-
+    g.scripts.update("groovy/gremlin.groovy")
     return g
