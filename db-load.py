@@ -222,7 +222,8 @@ def graph_dns(g, df_dns):
         # Now connect this transaction to the correct flow
         flows = g.flow.index.lookup(name=flowname)
         if flows == None:
-            print "ERROR: Flow '%s' does not exist" % flowname
+            # print "ERROR: Flow '%s' does not exist" % flowname
+            pass
         else:
             # lookup returns a generator, but since there should only be one
             # flow with this name, just take the first one
@@ -270,10 +271,10 @@ def graph_files(g, df_files):
         # there can be more than one host listed for each side of the
         # xfer (don't ask me how).  
         for h in df_files.loc[i]["tx_hosts"].split(","):
-            src = g.host.get_or_create(name, h,
+            src = g.host.get_or_create("name", h,
                                        {"name":h,
                                         "address":h})
-            g.requestedBy.create(file,src,{"ts":timestamp,
+            g.sentTo.create(file,src,{"ts":timestamp,
                                            "is_orig":df_files.loc[i]["is_orig"]})
             # Also have this extra bit of info about whether the originating
             # host is part of a local subnet.  We should make sure that is
@@ -282,10 +283,10 @@ def graph_files(g, df_files):
             src.save()
             
         for h in df_files.loc[i]["rx_hosts"].split(","):
-            dst = g.host.get_or_create(name, h,
+            dst = g.host.get_or_create("name", h,
                                        {"name":h,
                                         "address":h})
-            g.requestedOf.create(file,dst,{"ts":timestamp})
+            g.sentBy.create(file,dst,{"ts":timestamp})
             
  
 ##### Main #####
