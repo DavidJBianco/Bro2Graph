@@ -35,9 +35,3 @@ class RequestedBy(Relationship):
 class RequestedOf(Relationship):
     label = "requestedOf"
     element_type = label
-
-class Requested(Relationship):
-    label = "requested"
-    element_type = label
-
-    

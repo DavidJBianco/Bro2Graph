@@ -3,8 +3,8 @@ from host import Host
 from flow import Flow, Source, Dest, Contains
 from dns import FQDN, DNSTransaction, LookedUp, Queried, Answer, QueriedServer, Resolved, ResolvedTo
 from file import File, Transferred, SentTo, SentBy
-from http import HTTPTransaction, URI, UserAgent, Referrer, HostedBy, RequestedBy, RequestedOf, Requested
-from account import Account
+from http import HTTPTransaction, URI, UserAgent, Referrer, HostedBy, RequestedBy, RequestedOf
+from account import Account, Requested
 
 DEFAULT_URI = "http://localhost:8182/graphs/hunting"
 

@@ -7,6 +7,8 @@ from optparse import OptionParser
 import re
 import StringIO
 import pandas
+import random
+import string
 
 # Our interface to the GraphDB
 from bulbs.rexster import Graph, Config, DEBUG
@@ -36,6 +38,9 @@ SUPPORTED_BRO_FIELDS = {
 DATE_FMT="%FT%H:%M:%SZ"
 
 BRO_CUT_CMD=["bro-cut","-U",DATE_FMT]
+
+def unique_id(size=16):
+    return ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for _ in range(size))
 
 def is_IP(s):
     return not (re.match("\d+.\d+.\d+.\d+$", s) == None)
@@ -87,6 +92,11 @@ def readlog(file):
 
     df.replace(to_replace=["(empty)","-"], value=["",""], inplace=True)
 
+    # Some columns need to be forced into type String, primarily because they
+    # may contain lists and we always call split() on them, but they look like
+    # integers, so numpy tries to store them that way.
+    if "TTLs" in df.columns:
+        df["TTLs"] = df["TTLs"].astype(str)
     
     return df
 
@@ -145,7 +155,10 @@ def graph_dns(g, df_dns):
     # Iterate through all the flows
     for i in df_dns.index:
         # Create the DNSTransaction node
-        name = str(df_dns.loc[i]["trans_id"])
+        # name = str(df_dns.loc[i]["trans_id"])
+        name = "%d - %s - %s" % (df_dns.loc[i]["trans_id"],
+                                 df_dns.loc[i]["qtype_name"],
+                                 df_dns.loc[i]["query"])
         timestamp = df_dns.loc[i]["ts"]
         flowname = df_dns.loc[i]["uid"]
         
@@ -286,8 +299,21 @@ def graph_files(g, df_files):
             dst = g.host.get_or_create("name", h,
                                        {"name":h,
                                         "address":h})
-            g.sentBy.create(file,dst,{"ts":timestamp})
+            g.sentBy.create(dst, file,{"ts":timestamp})
             
+# def graph_http(g, df_http):
+#     # Iterate through all the flows
+#     for i in df_http.index:
+#         # Create the DNSTransaction node
+#         name = "H" + unique_id(16)
+#         timestamp = df_files.loc[i]["ts"]
+#         orig_fuids = df_files.loc[i]["orig_fuids"]
+#         orig_mime_types = df_files.loc[i]["orig_mime_types"]
+#         resp_fuids = df_files.loc[i]["resp_fuids"]
+#         resp_mime_types = df_files.loc[i]["resp_mime_types"]
+        
+#         # Create the http object. 
+#         file = g.http.create(name=name
  
 ##### Main #####
 
@@ -327,12 +353,13 @@ print "Graphing DNS Transactions..."
 df_dns = readlog("dns.log")
 graph_dns(g, df_dns)
 
+print "Graphing HTTP Transactions..."
+df_http = readlog("http.log")
+graph_http(g, df_http)
 
 # Print some basic info about the graph so we know we did some real work
-#print "Vertices: %d Edges: %d" % ( len(list(g.V)), len(list(g.E)) )
 
 script = g.scripts.get("graph_info")
-
 res = g.gremlin.execute(script)
 info = res.results.next().data
 

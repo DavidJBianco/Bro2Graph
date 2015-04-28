@@ -8,6 +8,10 @@ class Account(Node):
 
     name = String(nullable=False)
 
+class Requested(Relationship):
+    label = "requested"
+    element_type = label
+
     
 
     
