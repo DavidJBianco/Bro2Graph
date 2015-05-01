@@ -10,9 +10,16 @@ def graph_info() {
 }
 
 // Shortest path between two vertices
-def shortest_path(v1, v2, hops) {
+def shortest_path(node1_id, node2_id, hops) {
 
-  p = g.v(v1).as("x").outE.inV.loop("x"){it.loops < hops}{it.object == g.v(v2)}.path.next()
+  p = g.v(node1_id).as("x").outE.inV.loop("x"){it.loops < hops}{it.object == g.v(node2_id)}.path
   
   p
 }
+
+// Test script to get simple node info
+def node_info(node_id) {
+  n = g.v(node_id).map
+  n
+}
+
