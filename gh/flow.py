@@ -5,9 +5,9 @@ from bulbs.utils import current_datetime
 class Flow(Node):
 
     element_type = "flow"
-
     name = String(nullable=False)
-
+    color = String(default="#5B87F2")
+    
 class Source(Relationship):
     label = "source"
     element_type = "source"

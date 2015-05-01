@@ -7,5 +7,5 @@ class Host(Node):
     element_type = "host"
 
     name = String(nullable=False)
-
-
+    color = String(default="#DA456B")
+    

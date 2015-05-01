@@ -5,9 +5,9 @@ from bulbs.utils import current_datetime
 class File(Node):
 
     element_type = "file"
-
     name = String(nullable=False)
-
+    color = String(default="#E6E658")
+    
 class Transferred(Relationship):
     label = "transferred"
     element_type = label

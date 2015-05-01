@@ -7,11 +7,13 @@ class FQDN(Node):
     element_type = "fqdn"
 
     name = String(nullable=False)
-
+    color = String(default="#8CBC1C")
+    
 class DNSTransaction(Node):
     element_type = "dnsTransaction"
 
     name = String(nullable=False)
+    color = String(default="#FFBF56")
     
 class Resolved(Relationship):
     label = "resolved"
