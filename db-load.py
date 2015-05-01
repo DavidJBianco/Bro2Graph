@@ -15,6 +15,7 @@ from bulbs.rexster import Graph, Config, DEBUG
 
 # Our own modules
 from gh.connect import Connect
+from gh.util import graph_info, shortest_path
 
 # Bro log files we support
 SUPPORTED_BRO_LOGS = ["conn.log", "dns.log", "dpd.log","files.log","ftp.log","http.log","irc.log","notice.log","smtp.log","snmp.log","ssh.log"]
@@ -359,9 +360,7 @@ graph_dns(g, df_dns)
 
 # Print some basic info about the graph so we know we did some real work
 
-script = g.scripts.get("graph_info")
-res = g.gremlin.execute(script)
-info = res.results.next().data
+info = graph_info(g)
 
 print
 print "**** Graph Stats"
