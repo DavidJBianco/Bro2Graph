@@ -277,7 +277,7 @@ def graph_files(g, df_files):
 
         # Now connect this to the flow(s) it is associated with.
         for f in flows.split(","):
-            flow = g.flow.get_or_create("name", name, {"name":name})
+            flow = g.flow.get_or_create("name", f, {"name":f})
             g.contains.create(flow, file)
 
         # Connect it to the src and dest hosts in the file xfer.  Note that
@@ -353,9 +353,9 @@ print "Graphing DNS Transactions..."
 df_dns = readlog("dns.log")
 graph_dns(g, df_dns)
 
-print "Graphing HTTP Transactions..."
-df_http = readlog("http.log")
-graph_http(g, df_http)
+#print "Graphing HTTP Transactions..."
+#df_http = readlog("http.log")
+#graph_http(g, df_http)
 
 # Print some basic info about the graph so we know we did some real work
 
