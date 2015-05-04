@@ -3,7 +3,7 @@ from host import Host
 from flow import Flow, Source, Dest, Contains
 from dns import FQDN, DNSTransaction, LookedUp, Queried, Answer, QueriedServer, Resolved, ResolvedTo
 from file import File, Transferred, SentTo, SentBy
-from http import HTTPTransaction, URI, UserAgent, Referrer, HostedBy, RequestedBy, RequestedOf
+from http import HTTPTransaction, URI, UserAgent, Referrer, HostedBy, RequestedBy, RequestedOf, IdentifiedBy, Agent, Sent, Received
 from account import Account, Requested
 
 DEFAULT_URI = "http://localhost:8182/graphs/hunting"
@@ -46,6 +46,13 @@ def Connect(uri=DEFAULT_URI):
     g.add_proxy("httpTransaction", HTTPTransaction)
     g.add_proxy("uri", URI)
     g.add_proxy("userAgent", UserAgent)
+    g.add_proxy("requestedBy", RequestedBy)
+    g.add_proxy("requestedOf", RequestedOf)
+    g.add_proxy("hostedBy", HostedBy)
+    g.add_proxy("identifiedBy", IdentifiedBy)
+    g.add_proxy("agent", Agent)
+    g.add_proxy("sent", Sent)
+    g.add_proxy("received", Received)
     g.add_proxy("account", Account)
     g.add_proxy("requested", Requested)
     # Load in our groovy scripts

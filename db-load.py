@@ -40,7 +40,7 @@ DATE_FMT="%FT%H:%M:%SZ"
 
 BRO_CUT_CMD=["bro-cut","-U",DATE_FMT]
 
-def unique_id(size=16):
+def unique_id(size=17):
     return ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for _ in range(size))
 
 def is_IP(s):
@@ -249,7 +249,7 @@ def graph_dns(g, df_dns):
 def graph_files(g, df_files):
     # Iterate through all the flows
     for i in df_files.index:
-        # Create the DNSTransaction node
+        # Create the file node
         name = str(df_files.loc[i]["fuid"])
         timestamp = df_files.loc[i]["ts"]
         flows = df_files.loc[i]["conn_uids"]
@@ -302,20 +302,92 @@ def graph_files(g, df_files):
                                         "address":h})
             g.sentBy.create(dst, file,{"ts":timestamp})
             
-# def graph_http(g, df_http):
-#     # Iterate through all the flows
-#     for i in df_http.index:
-#         # Create the DNSTransaction node
-#         name = "H" + unique_id(16)
-#         timestamp = df_files.loc[i]["ts"]
-#         orig_fuids = df_files.loc[i]["orig_fuids"]
-#         orig_mime_types = df_files.loc[i]["orig_mime_types"]
-#         resp_fuids = df_files.loc[i]["resp_fuids"]
-#         resp_mime_types = df_files.loc[i]["resp_mime_types"]
+def graph_http(g, df_http):
+    # Iterate through all the flows
+    for i in df_http.index:
+        # Create the HTTPTransaction node
+        http = g.httpTransaction.create(name="H" + unique_id(),
+                                        ts=df_http.loc[i]["ts"],
+                                        resp_p=df_http.loc[i]["id.resp_p"],
+                                        trans_depth=df_http.loc[i]["trans_depth"],
+                                        method=df_http.loc[i]["method"].upper(),
+                                        request_body_len=df_http.loc[i]["request_body_len"],
+                                        response_body_len=df_http.loc[i]["response_body_len"],
+                                        status_code=df_http.loc[i]["status_code"],
+                                        status_msg=df_http.loc[i]["status_msg"],
+                                        info_code=df_http.loc[i]["info_code"],
+                                        info_msg=df_http.loc[i]["info_msg"],
+                                        filename=df_http.loc[i]["filename"],
+                                        tags=df_http.loc[i]["tags"],
+                                        username=df_http.loc[i]["username"],
+                                        password=df_http.loc[i]["password"],
+                                        proxied=df_http.loc[i]["proxied"])
         
-#         # Create the http object. 
-#         file = g.http.create(name=name
- 
+        # Now connect this to the flow it's associated with
+        flowname = df_http.loc[i]["uid"]
+        flow = g.flow.get_or_create("name", flowname, {"name":flowname})
+        g.contains.create(flow, http)
+
+        # Now connect it to the hosts on each side of the transaction
+        src_addr = df_http.loc[i]["id.orig_h"]
+        dst_addr = df_http.loc[i]["id.resp_h"]
+
+        src_host = g.host.get_or_create("name", src_addr, {"name":src_addr})
+        dst_host = g.host.get_or_create("name", dst_addr, {"name":dst_addr})
+
+        g.requestedBy.create(src_host, http)
+        g.requestedOf.create(http, dst_host)
+
+        # Connect to the server host.  This can be either a domain name or
+        # an IP address.  If it's a domain, we need to attach to an FQDN node.
+        # If it's an IP, we need a Host node.
+        h = df_http.loc[i]["host"]
+        if is_IP(h):
+            host = g.host.get_or_create("name", h, {"name":h})
+        else:
+            host = g.fqdn.get_or_create("name", h, {"name":h})
+
+        g.hostedBy.create(http, host)
+
+        # Now create and link to a URI node for the requested resource
+        u = df_http.loc[i]["uri"]
+        uri = g.uri.get_or_create("name", u, {"name":u})
+        g.identifiedBy.create(http, uri)
+
+        # Link to the UserAgent node
+        ua = df_http.loc[i]["user_agent"]
+        user_agent = g.userAgent.get_or_create("name", ua, {"name":ua})
+
+        g.agent.create(http, user_agent)
+
+        # Now link to the File objects transferred by this transaction.
+        # Each file object also has an associated MIME type.  These are
+        # encoded as two sets of paired lists:  orig_fuids/orig_mime_types
+        # and resp_fuids/resp_mime_types.  Each list in the pair is the same
+        # size, so for each fuid there will be exactly one MIME type.
+        orig_fuids = df_http.loc[i]["orig_fuids"].split(",")
+        orig_mime_types = df_http.loc[i]["orig_mime_types"].split(",")
+        resp_fuids = df_http.loc[i]["resp_fuids"].split(",")
+        resp_mime_types = df_http.loc[i]["resp_mime_types"].split(",")
+
+        if orig_fuids != ['']:
+            for i in range(len(orig_fuids)):
+                fuid = orig_fuids[i]
+                mime_type = orig_mime_types[i]
+
+                f = g.file.get_or_create("name", fuid, {"name":fuid})
+                g.sent.create(http, f, {"mime_type": mime_type})
+
+        if resp_fuids != ['']:
+            for i in range(len(resp_fuids)):
+                fuid = resp_fuids[i]
+                mime_type = resp_mime_types[i]
+                
+                f = g.file.get_or_create("name", fuid, {"name":fuid})
+                g.received.create(http, f, {"mime_type": mime_type})
+
+
+        
 ##### Main #####
 
 (options, args) = parse_options()
@@ -354,9 +426,9 @@ print "Graphing DNS Transactions..."
 df_dns = readlog("dns.log")
 graph_dns(g, df_dns)
 
-#print "Graphing HTTP Transactions..."
-#df_http = readlog("http.log")
-#graph_http(g, df_http)
+print "Graphing HTTP Transactions..."
+df_http = readlog("http.log")
+graph_http(g, df_http)
 
 # Print some basic info about the graph so we know we did some real work
 

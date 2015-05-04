@@ -35,3 +35,21 @@ class RequestedBy(Relationship):
 class RequestedOf(Relationship):
     label = "requestedOf"
     element_type = label
+
+class IdentifiedBy(Relationship):
+    label = "identifiedBy"
+    element_type = label
+
+class Agent(Relationship):
+    label = "agent"
+    element_type = label
+
+class Sent(Relationship):
+    label = "sent"
+    element_type = label
+
+class Received(Relationship):
+    label = "received"
+    element_type = label
+
+    
