@@ -1,14 +1,20 @@
 #!/usr/bin/env python
 
-def _v2s(v):
+def _v2s(v, verbose=False):
     if not "_type" in v:
         return "-"
     elif v["_type"] == "vertex":
-        return "v[id:%s %s %s]" % (v["_id"], v["element_type"], v["name"])
+        if verbose:
+            return "v[%s][%s %s]" % (v["_id"], v["element_type"], v["name"])
+        else:
+            return "v[%s]" % v["_id"]
     elif v["_type"] == "edge":
-        return "  e[id:%s inV:%s rel:%s outV:%s ]" % (v["_id"], v["_inV"], v["element_type"], v["_outV"])
+        if verbose:
+            return "e[%s][%s-%s->%s]" % (v["_id"], v["_outV"], v["element_type"], v["_inV"])
+        else:
+            return "e[%s][%s-%s->%s]" % (v["_id"], v["_outV"], v["element_type"], v["_inV"])
     else:
-        return "??"
+        return "[??]"
 
 def write_graphml(g, filename="/tmp/graph.graphml"):
     '''
@@ -23,14 +29,26 @@ def write_graphml(g, filename="/tmp/graph.graphml"):
     f.close()
 
 def shortest_path(g, node1_id, node2_id, max_hops=4):
+    '''
+    Calls a Groovy script to compute the shortest path between two nodes that
+    is less than or equal to "max_hops" long. In the event that there are 
+    multiple paths of the same length, it only returns one of them.  Which 
+    one it returns is undefined.
+
+    Return value is either a list of nodes and edges, or None if no path
+    was found.
+    '''
     script = g.scripts.get("shortest_path")
     res = g.gremlin.execute(script, dict(node1_id=node1_id, node2_id=node2_id, hops=max_hops))
     if res:
-        for path in res.results:
-            print "----"
-            for r in path.data:
-                print _v2s(r)
-
+        lst = list(res.results)
+        # Results will be a list-of-lists. If there are any results, return
+        # the first list.
+        if len(lst) > 0:
+            return lst[0].data
+    # If we got here, there were no results, so we couldn't find a path.
+    return None
+            
 def graph_info(g):
     script = g.scripts.get("graph_info")
     res = g.gremlin.execute(script)
