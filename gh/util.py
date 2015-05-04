@@ -28,7 +28,7 @@ def write_graphml(g, filename="/tmp/graph.graphml"):
     f.write(gml)
     f.close()
 
-def shortest_path(g, node1_id, node2_id, max_hops=4):
+def shortest_path(g, node1_id, node2_id, max_hops=10):
     '''
     Calls a Groovy script to compute the shortest path between two nodes that
     is less than or equal to "max_hops" long. In the event that there are 
