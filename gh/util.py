@@ -28,18 +28,23 @@ def write_graphml(g, filename="/tmp/graph.graphml"):
     f.write(gml)
     f.close()
 
-def shortest_path(g, node1_id, node2_id, max_hops=10):
+def shortest_path(g, node1_id, node2_id, max_hops=4, directed=False):
     '''
-    Calls a Groovy script to compute the shortest path between two nodes that
-    is less than or equal to "max_hops" long. In the event that there are 
-    multiple paths of the same length, it only returns one of them.  Which 
-    one it returns is undefined.
+    Calls a Groovy script to compute the shortest path between two
+    nodes that is less than or equal to "max_hops" long. In the event
+    that there are multiple paths of the same length, it only returns
+    one of them.  Which one it returns is undefined. If the "directed"
+    attribute is True, the function will follow relationships only in
+    the direction in which they occur on the graph. If set to False,
+    it will find paths regardelss of the direction of the
+    relationships.
 
     Return value is either a list of nodes and edges, or None if no path
     was found.
+
     '''
     script = g.scripts.get("shortest_path")
-    res = g.gremlin.execute(script, dict(node1_id=node1_id, node2_id=node2_id, hops=max_hops))
+    res = g.gremlin.execute(script, dict(node1_id=node1_id, node2_id=node2_id, hops=max_hops, directed=directed))
     if res:
         lst = list(res.results)
         # Results will be a list-of-lists. If there are any results, return
