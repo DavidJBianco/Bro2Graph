@@ -319,8 +319,8 @@ def graph_http(g, df_http):
                                         info_msg=df_http.loc[i]["info_msg"],
                                         filename=df_http.loc[i]["filename"],
                                         tags=df_http.loc[i]["tags"],
-                                        username=df_http.loc[i]["username"],
-                                        password=df_http.loc[i]["password"],
+#                                        username=df_http.loc[i]["username"],
+#                                        password=df_http.loc[i]["password"],
                                         proxied=df_http.loc[i]["proxied"])
         
         # Now connect this to the flow it's associated with
@@ -371,22 +371,27 @@ def graph_http(g, df_http):
         resp_mime_types = df_http.loc[i]["resp_mime_types"].split(",")
 
         if orig_fuids != ['']:
-            for i in range(len(orig_fuids)):
-                fuid = orig_fuids[i]
-                mime_type = orig_mime_types[i]
+            for x in range(len(orig_fuids)):
+                fuid = orig_fuids[x]
+                mime_type = orig_mime_types[x]
 
                 f = g.file.get_or_create("name", fuid, {"name":fuid})
                 g.sent.create(http, f, {"mime_type": mime_type})
 
         if resp_fuids != ['']:
-            for i in range(len(resp_fuids)):
-                fuid = resp_fuids[i]
-                mime_type = resp_mime_types[i]
+            for x in range(len(resp_fuids)):
+                fuid = resp_fuids[x]
+                mime_type = resp_mime_types[x]
                 
                 f = g.file.get_or_create("name", fuid, {"name":fuid})
                 g.received.create(http, f, {"mime_type": mime_type})
 
-
+        # Create the user account object and relationship
+        username = df_http.loc[i]["username"]
+        password = df_http.loc[i]["password"]
+        if username:
+            account = g.account.get_or_create("name", username, {"name":username})
+            g.requested.create(account, http, {"password":password})
         
 ##### Main #####
 
