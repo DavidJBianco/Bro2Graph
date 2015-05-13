@@ -53,7 +53,34 @@ def shortest_path(g, node1_id, node2_id, max_hops=4, directed=False):
             return lst[0].data
     # If we got here, there were no results, so we couldn't find a path.
     return None
-            
+
+def shortest_path_to_type(g, node1_id, node2_type, max_hops=4, directed=False):
+    '''
+    Calls a Groovy script to compute the shortest path between two
+    nodes that is less than or equal to "max_hops" long, where the destination
+    node is any node of the type specified in "node2_type". In the event
+    that there are multiple paths of the same length, it only returns
+    one of them.  Which one it returns is undefined. If the "directed"
+    attribute is True, the function will follow relationships only in
+    the direction in which they occur on the graph. If set to False,
+    it will find paths regardelss of the direction of the
+    relationships.
+
+    Return value is either a list of nodes and edges, or None if no path
+    was found.
+
+    '''
+    script = g.scripts.get("shortest_path_to_type")
+    res = g.gremlin.execute(script, dict(node1_id=node1_id, node2_type=node2_type, hops=max_hops, directed=directed))
+    if res:
+        lst = list(res.results)
+        # Results will be a list-of-lists. If there are any results, return
+        # the first list.
+        if len(lst) > 0:
+            return lst[0].data
+    # If we got here, there were no results, so we couldn't find a path.
+    return None
+
 def graph_info(g):
     script = g.scripts.get("graph_info")
     res = g.gremlin.execute(script)
