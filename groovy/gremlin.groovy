@@ -19,6 +19,17 @@ def shortest_path(node1_id, node2_id, hops, directed) {
   }
 }
 
+// Shortest path between two vertices, where the destination is a node
+// type, not a specific node ID
+def shortest_path_to_type(node1_id, node2_type, hops, directed) {
+
+  if (directed) {
+    p = g.v(node1_id).as("x").outE.inV.loop("x"){it.loops < hops}{it.object.element_type == node2_type}.path.sort{a,b -> a.size() <=> b.size()}.take(1)
+  } else {
+    p = g.v(node1_id).as("x").bothE.bothV.loop("x"){it.loops < hops}{it.object.element_type == node2_type}.path.sort{a,b -> a.size() <=> b.size()}.take(1)
+  }
+}
+
 // Test script to get simple node info
 def node_info(node_id) {
   n = g.v(node_id).map
