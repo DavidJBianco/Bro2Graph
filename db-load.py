@@ -6,6 +6,7 @@ import os
 from optparse import OptionParser
 import re
 import StringIO
+import numpy
 import pandas
 import random
 import string
@@ -16,9 +17,6 @@ from bulbs.rexster import Graph, Config, DEBUG
 # Our own modules
 from gh.connect import Connect
 from gh.util import graph_info, shortest_path
-
-# Bro log files we support
-SUPPORTED_BRO_LOGS = ["conn.log", "dns.log", "dpd.log","files.log","ftp.log","http.log","irc.log","notice.log","smtp.log","snmp.log","ssh.log"]
 
 # A per-log dict that contains the list of fields we want to extract, in order
 SUPPORTED_BRO_FIELDS = {
@@ -35,6 +33,10 @@ SUPPORTED_BRO_FIELDS = {
     "ssh.log": ["ts","uid","id.orig_h","id.orig_p","id.resp_h","id.resp_p","status","direction","client","server","remote_location.country_code","remote_location.region","remote_location.city","remote_location.latitude","remote_location.longitude"]
 }
 
+FIELDS_STRING = ["TTLs"]
+FIELDS_INTEGER = ["id.orig_p","id.resp_p","orig_bytes","resp_bytes","missed_bytes","orig_pkts","orig_ip_bytes","resp_pkts","resp_ip_bytes","qclass","qtype","trans_id","rcode","Z","depth","seen_bytes","total_bytes","missing_bytes","file_size","reply_code","data_channel.resp_p","trans_depth","request_body_len","response_body_len","status_code","info_code","dcc_file_size"]
+FIELDS_FLOAT = ["duration","lease_type"]
+
 # Output date format for timestamps
 DATE_FMT="%FT%H:%M:%SZ"
 
@@ -45,6 +47,18 @@ def unique_id(size=17):
 
 def is_IP(s):
     return not (re.match("\d+.\d+.\d+.\d+$", s) == None)
+
+def extend_list(lst, val, length):
+    '''
+    Given a list "lst", extend it to length "length".  Each new item will
+    be composed of the value "val".  Of course, if "lst" is already "length"
+    size or longer, just return and do nothing.
+    '''
+    if len(lst) >= length:
+        return lst
+    else:
+        lst.extend([val] * (length - len(lst)))
+        return lst
 
 def parse_options() :
     parser = OptionParser()
@@ -90,14 +104,28 @@ def readlog(file):
     df = pandas.DataFrame.from_csv(brodata, sep="\t", parse_dates=False, header=None, index_col=None)
 
     df.columns = SUPPORTED_BRO_FIELDS[logtype]
-
     df.replace(to_replace=["(empty)","-"], value=["",""], inplace=True)
 
     # Some columns need to be forced into type String, primarily because they
     # may contain lists and we always call split() on them, but they look like
     # integers, so numpy tries to store them that way.
-    if "TTLs" in df.columns:
-        df["TTLs"] = df["TTLs"].astype(str)
+    for field in FIELDS_STRING:
+        if field in df.columns:
+            df[field] = df[field].astype(str)
+
+    # Likewise, many rows need to be stored as Integers, but numpy thinks
+    # they may be strings (probably because a legal value is "-").  This is
+    # the list of the fields we know need to be converted
+    for field in FIELDS_INTEGER:
+        if field in df.columns:
+            df[field] = df[field].replace("",-1)
+            df[field] = df[field].astype(int)
+
+    # Finally, convert the Float fields
+    for field in FIELDS_FLOAT:
+        if field in df.columns:
+            df[field] = df[field].replace("",numpy.nan)
+            df[field] = df[field].astype(float)
     
     return df
 
@@ -197,13 +225,17 @@ def graph_dns(g, df_dns):
             #
             # There should also be one TTL per answer, so we'll split those and
             # use array indices to tie them together. The arrays are supposed
-            # to always be the same length
+            # to always be the same length, but maybe sometimes they are
+            # not.  We'll force the issue by extending the TTL list to be
+            # the same size as the address list.
             if df_dns.loc[i]["answers"]:
                 addrs = df_dns.loc[i]["answers"].split(",")
                 ttls = df_dns.loc[i]["TTLs"].split(",")
+                ttls = extend_list(ttls, ttls[len(ttls)-1],len(addrs))
+
                 for i in range(len(addrs)):
                     ans = addrs[i]
-                    ttl = ttls[i]
+                    ttl = float(ttls[i])
                     # DNS answers can be either IPs or other names. Figure
                     # out which type of node to create for each answer.
                     if is_IP(ans):
@@ -258,28 +290,39 @@ def graph_files(g, df_files):
         # transaction than a static object just for that file.  There can be
         # more than one node with the same MD5 hash, for example.  Cleary,
         # those are the same file in the real world, but not in our graph.
-        file = g.file.create(name=name,
-                             fuid=df_files.loc[i]["fuid"],
-                             source=df_files.loc[i]["source"],
-                             depth=df_files.loc[i]["depth"],
-                             analyzers=df_files.loc[i]["analyzers"],
-                             mime_type=df_files.loc[i]["mime_type"],
-                             filename=df_files.loc[i]["filename"],
-                             duration=df_files.loc[i]["duration"],
-                             seen_bytes=df_files.loc[i]["seen_bytes"],
-                             total_bytes=df_files.loc[i]["total_bytes"],
-                             missing_bytes=df_files.loc[i]["missing_bytes"],
-                             overflow_bytes=df_files.loc[i]["overflow_bytes"],
-                             timedout=df_files.loc[i]["timedout"],
-                             md5=df_files.loc[i]["md5"],
-                             sha1=df_files.loc[i]["sha1"],
-                             sha256=df_files.loc[i]["sha256"],
-                             extracted=df_files.loc[i]["extracted"])
+        #
+        # However, it is possible to actually have the same file transaction
+        # show up in the Bro logs multiple times.  AFAICT, this is mostly
+        # due to things like timeouts, where Bro records the file transfer
+        # start and then sends another log later that says that the xfer
+        # failed.  We need to make sure we always check to make sure there
+        # is only one File node for each actual transaction, but we'll use
+        # the fields from the most recent log, assuming things that Bro
+        # logs last will be more accurate.
+        fileobj = g.file.get_or_create("name", name, {"name":name})
 
+        fileobj.fuid=df_files.loc[i]["fuid"]
+        fileobj.source=df_files.loc[i]["source"]
+        fileobj.depth=df_files.loc[i]["depth"]
+        fileobj.analyzers=df_files.loc[i]["analyzers"]
+        fileobj.mime_type=df_files.loc[i]["mime_type"]
+        fileobj.filename=df_files.loc[i]["filename"]
+        fileobj.duration=df_files.loc[i]["duration"]
+        fileobj.seen_bytes=df_files.loc[i]["seen_bytes"]
+        fileobj.total_bytes=df_files.loc[i]["total_bytes"]
+        fileobj.missing_bytes=df_files.loc[i]["missing_bytes"]
+        fileobj.overflow_bytes=df_files.loc[i]["overflow_bytes"]
+        fileobj.timedout=df_files.loc[i]["timedout"]
+        fileobj.md5=df_files.loc[i]["md5"]
+        fileobj.sha1=df_files.loc[i]["sha1"]
+        fileobj.sha256=df_files.loc[i]["sha256"]
+        fileobj.extracted=df_files.loc[i]["extracted"]
+        fileobj.save()
+        
         # Now connect this to the flow(s) it is associated with.
         for f in flows.split(","):
             flow = g.flow.get_or_create("name", f, {"name":f})
-            g.contains.create(flow, file)
+            g.contains.create(flow, fileobj)
 
         # Connect it to the src and dest hosts in the file xfer.  Note that
         # there can be more than one host listed for each side of the
@@ -288,7 +331,7 @@ def graph_files(g, df_files):
             src = g.host.get_or_create("name", h,
                                        {"name":h,
                                         "address":h})
-            g.sentTo.create(file,src,{"ts":timestamp,
+            g.sentTo.create(fileobj,src,{"ts":timestamp,
                                            "is_orig":df_files.loc[i]["is_orig"]})
             # Also have this extra bit of info about whether the originating
             # host is part of a local subnet.  We should make sure that is
@@ -300,7 +343,7 @@ def graph_files(g, df_files):
             dst = g.host.get_or_create("name", h,
                                        {"name":h,
                                         "address":h})
-            g.sentBy.create(dst, file,{"ts":timestamp})
+            g.sentBy.create(dst, fileobj,{"ts":timestamp})
             
 def graph_http(g, df_http):
     # Iterate through all the flows
@@ -319,8 +362,6 @@ def graph_http(g, df_http):
                                         info_msg=df_http.loc[i]["info_msg"],
                                         filename=df_http.loc[i]["filename"],
                                         tags=df_http.loc[i]["tags"],
-#                                        username=df_http.loc[i]["username"],
-#                                        password=df_http.loc[i]["password"],
                                         proxied=df_http.loc[i]["proxied"])
         
         # Now connect this to the flow it's associated with
@@ -363,12 +404,23 @@ def graph_http(g, df_http):
         # Now link to the File objects transferred by this transaction.
         # Each file object also has an associated MIME type.  These are
         # encoded as two sets of paired lists:  orig_fuids/orig_mime_types
-        # and resp_fuids/resp_mime_types.  Each list in the pair is the same
-        # size, so for each fuid there will be exactly one MIME type.
+        # and resp_fuids/resp_mime_types.  In the event that the fuid list
+        # is longer than the MIME type list (indicating that the last values
+        # in the fuid list all have the same MIME type), we will extend the
+        # mime type list to explicitly name all the mime types. It makes it
+        # simpler to process the paired lists if we know they are the same
+        # size.
         orig_fuids = df_http.loc[i]["orig_fuids"].split(",")
         orig_mime_types = df_http.loc[i]["orig_mime_types"].split(",")
+        orig_mime_types = extend_list(orig_mime_types,
+                                      orig_mime_types[len(orig_mime_types)-1],
+                                      len(orig_fuids))
+
         resp_fuids = df_http.loc[i]["resp_fuids"].split(",")
         resp_mime_types = df_http.loc[i]["resp_mime_types"].split(",")
+        resp_mime_types = extend_list(resp_mime_types,
+                                      resp_mime_types[len(resp_mime_types)-1],
+                                      len(resp_fuids))
 
         if orig_fuids != ['']:
             for x in range(len(orig_fuids)):
@@ -380,12 +432,20 @@ def graph_http(g, df_http):
 
         if resp_fuids != ['']:
             for x in range(len(resp_fuids)):
-                fuid = resp_fuids[x]
-                mime_type = resp_mime_types[x]
-                
-                f = g.file.get_or_create("name", fuid, {"name":fuid})
-                g.received.create(http, f, {"mime_type": mime_type})
-
+                try:
+                    fuid = resp_fuids[x]
+                    mime_type = resp_mime_types[x]
+                    f = g.file.get_or_create("name", fuid, {"name":fuid})
+                    g.received.create(http, f, {"mime_type": mime_type})
+                except Exception, e:
+                    print "****"
+                    print "Exception: %s" % e
+                    print
+                    print resp_fuids
+                    print
+                    print "x: %s fuid: %s" % (x, fuid)
+                    sys.exit(-1)
+                    
         # Create the user account object and relationship
         username = df_http.loc[i]["username"]
         password = df_http.loc[i]["password"]
