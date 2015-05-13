@@ -7,7 +7,7 @@ class Account(Node):
     element_type = "account"
 
     name = String(nullable=False)
-    color = String(default="#DC54AD")
+    color = String(default="#00FFFF")
     
 class Requested(Relationship):
     label = "requested"
