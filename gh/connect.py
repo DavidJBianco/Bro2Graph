@@ -1,6 +1,6 @@
 from bulbs.rexster import Graph, Config
 from host import Host
-from flow import Flow, Source, Dest, Contains
+from flow import Flow, Source, Dest, Contains, ConnectedTo
 from dns import FQDN, DNSTransaction, LookedUp, Queried, Answer, QueriedServer, Resolved, ResolvedTo
 from file import File, Transferred, SentTo, SentBy
 from http import HTTPTransaction, URI, UserAgent, Referrer, HostedBy, RequestedBy, RequestedOf, IdentifiedBy, Agent, Sent, Received
@@ -31,6 +31,7 @@ def Connect(uri=DEFAULT_URI):
     g.add_proxy("source", Source)
     g.add_proxy("contains", Contains)
     g.add_proxy("dest", Dest)
+    g.add_proxy("connectedTo", ConnectedTo)
     g.add_proxy("fqdn", FQDN)
     g.add_proxy("dnsTransaction", DNSTransaction)
     g.add_proxy("resolved", Resolved)

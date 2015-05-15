@@ -10,14 +10,18 @@ class Flow(Node):
     
 class Source(Relationship):
     label = "source"
-    element_type = "source"
+    element_type = label
     
 class Dest(Relationship):
     label = "dest"
-    element_type = "dest"
+    element_type = label
 
+class ConnectedTo(Relationship):
+    label = "connectedTo"
+    element_type = label
+    
 class Contains(Relationship):
     label = "contains"
-    element_type = "contains"
+    element_type = label
 
 

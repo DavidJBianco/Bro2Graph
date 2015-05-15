@@ -154,7 +154,7 @@ def graph_flows(g, df_conn):
         if df_conn.loc[con]["local_orig"] == "T":
             src_host.local = "T"
             src_host.save()
-        
+
         # Create the Flow object.  Since we can run the same log file through
         # multiple times, or observe the same flow from different log files,
         # assume flows with the same name are actually the same flow.
@@ -179,6 +179,18 @@ def graph_flows(g, df_conn):
         nodes = flow.outV("dest")
         if nodes == None or not (dst_host in nodes):
             g.dest.create(flow, dst_host)
+
+        # Make a direct link between the src and dest hosts, as this
+        # is a common analysis task.  It doesn't *always* make sense
+        # to go through the flows.
+        edges = src_host.outE("connectedTo")
+        if edges == None or not (src_host in edges):
+            e = g.connectedTo.create(src_host, dst_host)
+            e.weight=1
+            e.save()
+        else:
+            edges[0].weight += 1
+        
 
 def graph_dns(g, df_dns):
     # Iterate through all the flows
