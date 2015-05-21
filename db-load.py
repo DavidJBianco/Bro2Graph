@@ -46,7 +46,15 @@ def unique_id(size=17):
     return ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for _ in range(size))
 
 def is_IP(s):
-    return not (re.match("\d+.\d+.\d+.\d+$", s) == None)
+    # this is pretty dumb.  If it looks like an IPv4 address, fine.  But a
+    # good IPv6 regex is ridiculously complex.  I took a shortcut, since I
+    # this routine is only ever called to disambiguate IPs from hostnames or
+    # FQDNs.  If there's even a single ":", we'll just assume this must be
+    # IPv6, since neither hostnames nor FQDNs can contain that char.
+    #
+    # Sorry.
+    return( re.match("\d+.\d+.\d+.\d+$", s) != None or re.search(":",s) != None)
+
 
 def extend_list(lst, val, length):
     '''
@@ -290,6 +298,18 @@ def graph_dns(g, df_dns):
             if nodes == None or not (transaction in nodes):
                 edge = g.contains.create(flow, transaction)
 
+
+        # Associate the src host with the FQDN it resolved.  Since a host
+        # can resolve a domain multiple times, we'll also keep track of a
+        # "weight" feature to count how many times this happened.
+        edges = src.outE("resolved")
+        if edges == None or not (src in edges):
+            e = g.resolved.create(src, fqdn)
+            e.weight=1
+            e.save()
+        else:
+            edges[0].weight += 1
+        
 def graph_files(g, df_files):
     # Iterate through all the flows
     for i in df_files.index:
