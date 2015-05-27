@@ -19,6 +19,7 @@ def display_graph(t, nodes, edges):
                 node_temp.property[key] = properties[key]
 
             node_temp.property["colour"] = node_temp.property["color"]
+            node_temp.property["label"] = node_temp.property["name"]
             t.add_node(node_temp)
 
     if edges != None:
@@ -46,6 +47,8 @@ def display_graph_from_list(t, l=None):
 
             for key in element:
                 node_temp.property[key] = element[key]
+
+            node_temp.property["label"] = node_temp.property["name"]
             node_temp.property["colour"] = node_temp.property["color"]
 
             t.add_node(node_temp)
