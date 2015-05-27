@@ -17,6 +17,7 @@ from bulbs.rexster import Graph, Config, DEBUG
 # Our own modules
 from gh.connect import Connect
 from gh.util import graph_info, shortest_path
+from db_stats import graph_stats
 
 # A per-log dict that contains the list of fields we want to extract, in order
 SUPPORTED_BRO_FIELDS = {
@@ -531,23 +532,7 @@ df_http = readlog("http.log")
 graph_http(g, df_http)
 
 # Print some basic info about the graph so we know we did some real work
-
-info = graph_info(g)
-
-print
-print "**** Graph Stats"
-print
-print "  **** Totals"
-print "  %15s\t%d" % ("Vertices", info["numv"])
-print "  %15s\t%d" % ("Edges", info["nume"])
-print
-print "  **** Vertices by type:"
-for v in info["vinfo"]:
-    print "  %15s\t%d" % (v, info["vinfo"][v])
-print
-print "  **** Edges by type:"
-for e in info["einfo"]:
-    print "  %15s\t%d" % (e, info["einfo"][e])
+graph_stats(g)
 
 
     
