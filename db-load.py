@@ -431,7 +431,10 @@ def graph_http(g, df_http):
         ua = df_http.loc[i]["user_agent"]
         user_agent = g.userAgent.get_or_create("name", ua, {"name":ua})
 
+        # Link to the HTTP transaction
         g.agent.create(http, user_agent)
+        # Link to the host that sent the request 
+        g.agent.create(src_host, user_agent)
 
         # Now link to the File objects transferred by this transaction.
         # Each file object also has an associated MIME type.  These are
