@@ -13,6 +13,11 @@ class Requested(Relationship):
     label = "requested"
     element_type = label
 
+class Uses(Relationship):
+    label = "uses"
+    element_type = label
+
+    
     
 
     

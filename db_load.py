@@ -488,6 +488,7 @@ def graph_http(g, df_http):
         if username:
             account = g.account.get_or_create("name", username, {"name":username})
             g.requested.create(account, http, {"password":password})
+            g.uses.create(account, src_host)
         
 ##### Main #####
 

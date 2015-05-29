@@ -4,7 +4,7 @@ from flow import Flow, Source, Dest, Contains, ConnectedTo
 from dns import FQDN, DNSTransaction, LookedUp, Queried, Answer, QueriedServer, Resolved, ResolvedTo
 from file import File, Transferred, SentTo, SentBy
 from http import HTTPTransaction, URI, UserAgent, Referrer, HostedBy, RequestedBy, RequestedOf, IdentifiedBy, Agent, Sent, Received
-from account import Account, Requested
+from account import Account, Requested, Uses
 
 DEFAULT_URI = "http://localhost:8182/graphs/hunting"
 
@@ -56,6 +56,7 @@ def Connect(uri=DEFAULT_URI):
     g.add_proxy("received", Received)
     g.add_proxy("account", Account)
     g.add_proxy("requested", Requested)
+    g.add_proxy("uses", Uses)
     # Load in our groovy scripts
     g.scripts.update("groovy/gremlin.groovy")
     return g
