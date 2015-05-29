@@ -64,14 +64,15 @@ def display_graph_from_list(t, l=None):
 
     t.commit()
 
+if __name__ == "__main__":
+    g = Connect()
+    t = GephiStreamerManager()
 
-g = Connect()
-t = GephiStreamerManager()
+    print "Getting nodes..."
+    nodes = g.V
+    print "Getting edges..."
+    edges = g.E
 
-print "Getting nodes..."
-nodes = g.V
-print "Getting edges..."
-edges = g.E
+    display_graph(t, g.V, g.E)
 
-display_graph(t, g.V, g.E)
-
+    
