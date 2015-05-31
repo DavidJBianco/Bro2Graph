@@ -13,9 +13,9 @@ def graph_info() {
 def shortest_path(node1_id, node2_id, hops, directed) {
 
   if (directed) {
-    p = g.v(node1_id).as("x").outE.inV.loop("x"){it.loops < hops}{it.object == g.v(node2_id)}.path.sort{a,b -> a.size() <=> b.size()}.take(1)
+    p = g.v(node1_id).as("x").outE.inV.dedup.loop("x"){it.loops < hops}{it.object.id == node2_id.toString()}.path.sort{a,b -> a.size() <=> b.size()}.take(1)
   } else {
-    p = g.v(node1_id).as("x").bothE.bothV.loop("x"){it.loops < hops}{it.object == g.v(node2_id)}.path.sort{a,b -> a.size() <=> b.size()}.take(1)
+    p = g.v(node1_id).as("x").bothE.bothV.dedup.loop("x"){it.loops < hops}{it.object.id == node2_id.toString()}.path.sort{a,b -> a.size() <=> b.size()}.take(1)
   }
 }
 
@@ -24,9 +24,9 @@ def shortest_path(node1_id, node2_id, hops, directed) {
 def shortest_path_to_type(node1_id, node2_type, hops, directed) {
 
   if (directed) {
-    p = g.v(node1_id).as("x").outE.inV.loop("x"){it.loops < hops}{it.object.element_type == node2_type}.path.sort{a,b -> a.size() <=> b.size()}.take(1)
+    p = g.v(node1_id).as("x").outE.inV.dedup.loop("x"){it.loops < hops}{it.object.element_type == node2_type}.path.sort{a,b -> a.size() <=> b.size()}.take(1)
   } else {
-    p = g.v(node1_id).as("x").bothE.bothV.loop("x"){it.loops < hops}{it.object.element_type == node2_type}.path.sort{a,b -> a.size() <=> b.size()}.take(1)
+    p = g.v(node1_id).as("x").bothE.bothV.dedup.loop("x"){it.loops < hops}{it.object.element_type == node2_type}.path.sort{a,b -> a.size() <=> b.size()}.take(1)
   }
 }
 
