@@ -16,7 +16,7 @@ from bulbs.rexster import Graph, Config, DEBUG
 
 # Our own modules
 from gh.connect import Connect
-from gh.util import graph_info, shortest_path
+from gh.util import graph_info, shortest_path, edge_list
 from db_stats import graph_stats
 
 # A per-log dict that contains the list of fields we want to extract, in order
@@ -192,14 +192,17 @@ def graph_flows(g, df_conn):
         # Make a direct link between the src and dest hosts, as this
         # is a common analysis task.  It doesn't *always* make sense
         # to go through the flows.
-        edges = src_host.outE("connectedTo")
-        if edges == None or not (src_host in edges):
+        neighbors = src_host.outV("connectedTo")
+        if neighbors == None or not (dst_host in neighbors):
             e = g.connectedTo.create(src_host, dst_host)
             e.weight=1
             e.save()
         else:
-            edges[0].weight += 1
-        
+            edges = edge_list(g, src_host._id, dst_host._id, "connectedTo")
+            # There should only be one of these edges, and we already know
+            # it exists, so it's safe to just take the first one
+            edge = edges.next()
+            g.connectedTo.update(edge._id, weight=(edge.weight + 1))
 
 def graph_dns(g, df_dns):
     # Iterate through all the flows
@@ -303,13 +306,17 @@ def graph_dns(g, df_dns):
         # Associate the src host with the FQDN it resolved.  Since a host
         # can resolve a domain multiple times, we'll also keep track of a
         # "weight" feature to count how many times this happened.
-        edges = src.outE("resolved")
-        if edges == None or not (src in edges):
+        neighbors = src.outV("resolved")
+        if neighbors == None or not (fqdn in neighbors):
             e = g.resolved.create(src, fqdn)
             e.weight=1
             e.save()
         else:
-            edges[0].weight += 1
+            edges = edge_list(g, src._id, fqdn._id, "resolved")
+            # There should only be one of these edges, and we already know
+            # it exists, so it's safe to just take the first one
+            edge = edges.next()
+            g.resolved.update(edge._id, weight=(edge.weight + 1))
         
 def graph_files(g, df_files):
     # Iterate through all the flows
@@ -364,7 +371,7 @@ def graph_files(g, df_files):
             src = g.host.get_or_create("name", h,
                                        {"name":h,
                                         "address":h})
-            g.sentTo.create(fileobj,src,{"ts":timestamp,
+            g.sentBy.create(fileobj,src,{"ts":timestamp,
                                            "is_orig":df_files.loc[i]["is_orig"]})
             # Also have this extra bit of info about whether the originating
             # host is part of a local subnet.  We should make sure that is
@@ -376,7 +383,7 @@ def graph_files(g, df_files):
             dst = g.host.get_or_create("name", h,
                                        {"name":h,
                                         "address":h})
-            g.sentBy.create(dst, fileobj,{"ts":timestamp})
+            g.sentTo.create(dst, fileobj,{"ts":timestamp})
             
 def graph_http(g, df_http):
     # Iterate through all the flows
