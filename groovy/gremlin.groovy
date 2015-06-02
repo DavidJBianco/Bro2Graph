@@ -36,3 +36,9 @@ def node_info(node_id) {
   n
 }
 
+// Return the list of edges between a given two nodes
+def edge_list(node1_id, node2_id, edge_type) {
+  e = g.v(node1_id).outE(edge_type).as("x").inV.filter{it.id == node2_id.toString()}.back("x")
+
+  e
+}

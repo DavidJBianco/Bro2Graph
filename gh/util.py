@@ -92,3 +92,7 @@ def node_info(g, node_id):
     res = g.gremlin.execute(script, dict(node_id=node_id))
     return res.results.next().data
 
+def edge_list(g, node1_id, node2_id, edge_type):
+    script = g.scripts.get("edge_list")
+    res = g.gremlin.query(script, dict(node1_id=node1_id, node2_id=node2_id, edge_type=edge_type))
+    return res
