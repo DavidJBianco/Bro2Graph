@@ -77,10 +77,13 @@ def parse_options() :
                       help="Suppress unecessary output (run quietly)")
     parser.add_option("-o", "--output", dest="outputdir",default=".",
                       help="Output directory (will be created if necessary)")
+    parser.add_option("-s", "--sample", dest="sample",default=False,type="int",
+                      help="Randomly select SAMPLE # of connections and associated log entries.")
+
     (options, args) = parser.parse_args()
     return(options, args)
 
-def readlog(file):
+def readlog(file, connection_ids=False):
 
     output = ""
 
@@ -113,6 +116,29 @@ def readlog(file):
     df = pandas.DataFrame.from_csv(brodata, sep="\t", parse_dates=False, header=None, index_col=None)
 
     df.columns = SUPPORTED_BRO_FIELDS[logtype]
+
+    # If this is the connection log, and if we've requested a random sample,
+    # cut the dataframe down to ONLY contain that random sample
+    if logtype == "conn.log" and options.sample:
+        print "Size before sampling: %d" % len(df.index)
+        df = df.sample(n=options.sample)
+        df.reset_index(drop=True, inplace=True)
+        print "Size after sampling: %d" % len(df.index)
+    elif logtype == "files.log" and connection_ids:
+        df = df[df.conn_uids.isin(connection_ids)]
+        df.reset_index(drop=True, inplace=True)
+    elif logtype != "conn.log" and connection_ids and "uid" in df.columns:
+        # If this is any other type of log AND we have an explicit list of
+        # connection IDs we sampled AND this is a file that has the "uid"
+        # data to pair it with the conn.log, pare down the dataframe to
+        # only include those rows with the right uids
+        df = df[df.uid.isin(connection_ids)]
+        df.reset_index(drop=True, inplace=True)
+        # It is entirely possible that this sampling may mean that some
+        # log files no longer have any output (for example, you only sampled
+        # a list of connections, none of which were DHCP).  
+
+    
     df.replace(to_replace=["(empty)","-"], value=["",""], inplace=True)
 
     # Some columns need to be forced into type String, primarily because they
@@ -135,6 +161,14 @@ def readlog(file):
         if field in df.columns:
             df[field] = df[field].replace("",numpy.nan)
             df[field] = df[field].astype(float)
+
+    if logtype == "conn.log":
+        # if we're processing the conn.log AND we've requested random samples,
+        # create a list of the sampled connection IDs and update the 
+        # connection_ids parameter.  Otherwise, leave it the same.
+        if options.sample:
+            for id in df["uid"].tolist():
+                connection_ids.append(id)
     
     return df
 
@@ -306,17 +340,18 @@ def graph_dns(g, df_dns):
         # Associate the src host with the FQDN it resolved.  Since a host
         # can resolve a domain multiple times, we'll also keep track of a
         # "weight" feature to count how many times this happened.
-        neighbors = src.outV("resolved")
-        if neighbors == None or not (fqdn in neighbors):
-            e = g.resolved.create(src, fqdn)
-            e.weight=1
-            e.save()
-        else:
-            edges = edge_list(g, src._id, fqdn._id, "resolved")
-            # There should only be one of these edges, and we already know
-            # it exists, so it's safe to just take the first one
-            edge = edges.next()
-            g.resolved.update(edge._id, weight=(edge.weight + 1))
+        if df_dns.loc[i]["query"]:
+            neighbors = src.outV("resolved")
+            if neighbors == None or not (fqdn in neighbors):
+                e = g.resolved.create(src, fqdn)
+                e.weight=1
+                e.save()
+            else:
+                edges = edge_list(g, src._id, fqdn._id, "resolved")
+                # There should only be one of these edges, and we already know
+                # it exists, so it's safe to just take the first one
+                edge = edges.next()
+                g.resolved.update(edge._id, weight=(edge.weight + 1))
         
 def graph_files(g, df_files):
     # Iterate through all the flows
@@ -522,21 +557,26 @@ g = Connect()
 # Now read the types of logs we know how to process, extract the relevant
 # data and add it to the graph
 
+connection_ids = list()
 
 print "Graphing Flows..."
-df_conn = readlog("conn.log")
+df_conn = readlog("conn.log", connection_ids)
+print "Number of events: %d" % len(df_conn.index)
 graph_flows(g, df_conn)
 
 print "Graphing Files..."
-df_files = readlog("files.log")
+df_files = readlog("files.log", connection_ids)
+print "Number of events: %d" % len(df_files.index)
 graph_files(g, df_files)
 
 print "Graphing DNS Transactions..."
-df_dns = readlog("dns.log")
+df_dns = readlog("dns.log", connection_ids)
+print "Number of events: %d" % len(df_dns.index)
 graph_dns(g, df_dns)
 
 print "Graphing HTTP Transactions..."
-df_http = readlog("http.log")
+df_http = readlog("http.log", connection_ids)
+print "Number of events: %d" % len(df_http.index)
 graph_http(g, df_http)
 
 # Print some basic info about the graph so we know we did some real work
